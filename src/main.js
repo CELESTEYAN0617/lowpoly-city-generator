@@ -5,6 +5,7 @@ import { CityGenerator } from './CityGenerator.js';
 import { UIController } from './UIController.js';
 import { TileBuilder } from './TileBuilder.js';
 import { TextureManager } from './TextureManager.js';
+import { ParameterManager } from './ParameterManager.js';
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0xaadfff);
@@ -34,6 +35,29 @@ const cityGenerator = new CityGenerator(scene);
 
 const tileBuilder = new TileBuilder();
 const textureManager = new TextureManager();
+
+const parameterManager = new ParameterManager();
+
+// 初始化参数到cityGenerator
+cityGenerator.updateParameters(parameterManager.getParameters());
+textureManager.updateParameters(parameterManager.getParameters());
+
+parameterManager.onParameterChange((params) => {
+  cityGenerator.updateParameters(params);
+  textureManager.updateParameters(params);
+  // 实时重新生成城市
+  cityGenerator.regenerateCity();
+});
+
+parameterManager.onResetCamera(() => {
+  console.log('重置相机');
+  camera.position.set(0, 20, 40);
+  uiController.yaw = 0;
+  uiController.pitch = -0.3;
+  // 重置移动状态
+  uiController.move = { forward: false, backward: false, left: false, right: false };
+  uiController.velocity.set(0, 0);
+});
 
 function animate() {
   requestAnimationFrame(animate);
