@@ -11,7 +11,7 @@ export class CityGenerator {
     
     // 默认参数
     this.parameters = {
-      buildingDensity: 0.8,
+      buildingDensity: 0.4, // 降低建筑密度，增加间距
       heightRange: 16,
       roadWidth: 2.5,
       mainRoadWidth: 6,
@@ -51,24 +51,119 @@ export class CityGenerator {
     
     for (let x = 0; x < this.BLOCK_SIZE; x++) {
       for (let z = 0; z < this.BLOCK_SIZE; z++) {
-        // Skip main roads
+        // 跳过主路和边界
         if (x % this.parameters.mainRoadInterval === 0 || z % this.parameters.mainRoadInterval === 0) continue;
-        // Skip edge roads
         if (x === 0 || z === 0) continue;
+        // 草坪 - 增加尺寸以消除缝隙
+        const grassMesh = this.tileBuilder.buildGrass(
+          x * this.CELL_SIZE + (this.CELL_SIZE/2),
+          0.5,
+          z * this.CELL_SIZE + (this.CELL_SIZE/2),
+          this.CELL_SIZE + 2,
+          0.5,
+          this.CELL_SIZE + 2
+        );
+        group.add(grassMesh);
+        // 检查四周是否为马路，若是则生成白色边缘
+        const edgeThickness = 0.05;
+        const edgeLength = this.CELL_SIZE - 0.4; // 减小长度，避免覆盖草地边缘
+        const edgeWidth = 0.4; // 增加宽度，让白色边界更宽
+        const edgeY = 0.76; // 略高于草坪
+        const edgeMaterial = new THREE.MeshLambertMaterial({ color: 0xffffff });
         
+        // 只在靠近道路的边缘生成白色边界
+        // 上方 - 只在靠近主路时生成
+        if ((z+1) % this.parameters.mainRoadInterval === 0) {
+          const edgeGeo = new THREE.BoxGeometry(edgeLength, edgeThickness, edgeWidth);
+          const edgeMesh = new THREE.Mesh(edgeGeo, edgeMaterial);
+          edgeMesh.position.set(x * this.CELL_SIZE + (this.CELL_SIZE/2), edgeY, (z+1) * this.CELL_SIZE - edgeWidth/2);
+          group.add(edgeMesh);
+        }
+        // 下方 - 只在靠近主路时生成
+        if ((z-1) % this.parameters.mainRoadInterval === 0) {
+          const edgeGeo = new THREE.BoxGeometry(edgeLength, edgeThickness, edgeWidth);
+          const edgeMesh = new THREE.Mesh(edgeGeo, edgeMaterial);
+          edgeMesh.position.set(x * this.CELL_SIZE + (this.CELL_SIZE/2), edgeY, z * this.CELL_SIZE + edgeWidth/2);
+          group.add(edgeMesh);
+        }
+        // 右方 - 只在靠近主路时生成
+        if ((x+1) % this.parameters.mainRoadInterval === 0) {
+          const edgeGeo = new THREE.BoxGeometry(edgeWidth, edgeThickness, edgeLength);
+          const edgeMesh = new THREE.Mesh(edgeGeo, edgeMaterial);
+          edgeMesh.position.set((x+1) * this.CELL_SIZE - edgeWidth/2, edgeY, z * this.CELL_SIZE + (this.CELL_SIZE/2));
+          group.add(edgeMesh);
+        }
+        // 左方 - 只在靠近主路时生成
+        if ((x-1) % this.parameters.mainRoadInterval === 0) {
+          const edgeGeo = new THREE.BoxGeometry(edgeWidth, edgeThickness, edgeLength);
+          const edgeMesh = new THREE.Mesh(edgeGeo, edgeMaterial);
+          edgeMesh.position.set(x * this.CELL_SIZE + edgeWidth/2, edgeY, z * this.CELL_SIZE + (this.CELL_SIZE/2));
+          group.add(edgeMesh);
+        }
         // 应用建筑密度
         const seed = chunkX * 10000 + chunkZ * 100 + x * 10 + z;
         if (this.seededRandom(seed + 1000) > this.parameters.buildingDensity) continue;
         
+        // 计算房屋在白色边界内的位置和尺寸
+        const buildingMargin = 0.4 + 0.1; // 使用新的edgeWidth值 + 留出边距
+        const buildingSize = this.CELL_SIZE - buildingMargin * 2;
+        
+        // 让房屋围着马路边生成
+        let buildingX = x * this.CELL_SIZE + (this.CELL_SIZE/2);
+        let buildingZ = z * this.CELL_SIZE + (this.CELL_SIZE/2);
+        
+        // 根据靠近哪条道路来决定房屋位置
+        const roadOffset = 4; // 增加距离道路的偏移量，让房屋离道路更远
+        let nearRoad = false; // 标记是否靠近道路
+        let roadDirection = ''; // 记录靠近哪条道路
+        
+        // 如果靠近上方道路，将房屋向上移动
+        if ((z+1) % this.parameters.mainRoadInterval === 0) {
+          buildingZ = z * this.CELL_SIZE + roadOffset;
+          nearRoad = true;
+          roadDirection = 'north';
+        }
+        // 如果靠近下方道路，将房屋向下移动
+        else if ((z-1) % this.parameters.mainRoadInterval === 0) {
+          buildingZ = (z+1) * this.CELL_SIZE - roadOffset;
+          nearRoad = true;
+          roadDirection = 'south';
+        }
+        // 如果靠近右方道路，将房屋向右移动
+        else if ((x+1) % this.parameters.mainRoadInterval === 0) {
+          buildingX = x * this.CELL_SIZE + roadOffset;
+          nearRoad = true;
+          roadDirection = 'east';
+        }
+        // 如果靠近左方道路，将房屋向左移动
+        else if ((x-1) % this.parameters.mainRoadInterval === 0) {
+          buildingX = (x+1) * this.CELL_SIZE - roadOffset;
+          nearRoad = true;
+          roadDirection = 'west';
+        }
+        
+        // 只有在靠近道路时才生成房屋
+        if (!nearRoad) continue;
+        
+        // 根据道路方向调整房屋尺寸，避免交叉
+        let adjustedBuildingSize = buildingSize;
+        if (roadDirection === 'north' || roadDirection === 'south') {
+          // 南北方向的房屋，减小宽度避免与东西方向的房屋交叉
+          adjustedBuildingSize = buildingSize * 0.6; // 进一步减小尺寸
+        } else if (roadDirection === 'east' || roadDirection === 'west') {
+          // 东西方向的房屋，减小深度避免与南北方向的房屋交叉
+          adjustedBuildingSize = buildingSize * 0.6; // 进一步减小尺寸
+        }
+        
         const h = 4 + Math.floor(this.seededRandom(seed) * this.parameters.heightRange);
         const color = this.textureManager.getBuildingColor(seed, this.seededRandom.bind(this));
         const mesh = this.tileBuilder.buildBuilding(
-          x * this.CELL_SIZE + (this.CELL_SIZE/2),
+          buildingX,
           h/2,
-          z * this.CELL_SIZE + (this.CELL_SIZE/2),
-          this.CELL_SIZE - this.parameters.roadWidth,
+          buildingZ,
+          adjustedBuildingSize,
           h,
-          this.CELL_SIZE - this.parameters.roadWidth,
+          adjustedBuildingSize,
           color,
           seed,
           this.seededRandom.bind(this)
@@ -79,42 +174,28 @@ export class CityGenerator {
     
     // Add roads
     for (let x = 0; x <= this.BLOCK_SIZE; x++) {
-      for (let z = 0; z <= this.BLOCK_SIZE; z++) {
-        // 判断当前格子是否为道路
-        const isRoadX = (x % this.parameters.mainRoadInterval === 0);
-        const isRoadZ = (z % this.parameters.mainRoadInterval === 0);
-        if (!isRoadX && !isRoadZ) continue;
-
-        // 判断四个方向是否有路
-        const left  = (x > 0) && ((x-1) % this.parameters.mainRoadInterval === 0 || isRoadZ);
-        const right = (x < this.BLOCK_SIZE) && ((x+1) % this.parameters.mainRoadInterval === 0 || isRoadZ);
-        const up    = (z > 0) && ((z-1) % this.parameters.mainRoadInterval === 0 || isRoadX);
-        const down  = (z < this.BLOCK_SIZE) && ((z+1) % this.parameters.mainRoadInterval === 0 || isRoadX);
-        const cx = x * this.CELL_SIZE;
-        const cz = z * this.CELL_SIZE;
-        const y = 0.05;
-        const w = isRoadX ? this.parameters.mainRoadWidth : this.parameters.roadWidth;
-        const d = isRoadZ ? this.parameters.mainRoadWidth : this.parameters.roadWidth;
-        // 统计有几个方向有路
-        const count = [left, right, up, down].filter(Boolean).length;
-        let mesh = null;
-        if (count === 4) {
-          mesh = this.tileBuilder.buildCrossRoad(cx, y, cz, Math.max(w, d)/2);
-        } else if (count === 3) {
-          mesh = this.tileBuilder.buildTJunction(cx, y, cz, Math.max(w, d)/2);
-        } else if (count === 2) {
-          // 判断是直路还是拐弯
-          if ((left && right) || (up && down)) {
-            mesh = this.tileBuilder.buildStraightRoad(cx, y, cz, this.CELL_SIZE, Math.max(w, d), up && down);
-          } else {
-            mesh = this.tileBuilder.buildCornerRoad(cx, y, cz, Math.max(w, d));
-          }
-        } else if (count === 1) {
-          // 单独一条路，画成直路
-          mesh = this.tileBuilder.buildStraightRoad(cx, y, cz, this.CELL_SIZE, Math.max(w, d), up || down);
-        }
-        if (mesh) group.add(mesh);
-      }
+      let width = (x % this.parameters.mainRoadInterval === 0) ? this.parameters.mainRoadWidth : this.parameters.roadWidth;
+      const mesh = this.tileBuilder.buildRoad(
+        x * this.CELL_SIZE,
+        0.05,
+        this.BLOCK_SIZE * this.CELL_SIZE / 2,
+        width,
+        0.1,
+        this.BLOCK_SIZE * this.CELL_SIZE
+      );
+      group.add(mesh);
+    }
+    for (let z = 0; z <= this.BLOCK_SIZE; z++) {
+      let width = (z % this.parameters.mainRoadInterval === 0) ? this.parameters.mainRoadWidth : this.parameters.roadWidth;
+      const mesh = this.tileBuilder.buildRoad(
+        this.BLOCK_SIZE * this.CELL_SIZE / 2,
+        0.05,
+        z * this.CELL_SIZE,
+        this.BLOCK_SIZE * this.CELL_SIZE,
+        0.1,
+        width
+      );
+      group.add(mesh);
     }
     
     this.scene.add(group);
