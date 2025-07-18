@@ -9,9 +9,9 @@ export class CityGenerator {
     this.tileBuilder = new TileBuilder();
     this.textureManager = new TextureManager();
     
-    // 默认参数
+    // Default parameters
     this.parameters = {
-      buildingDensity: 0.4, // 降低建筑密度，增加间距
+      buildingDensity: 0.4, // Reduce building density, increase spacing
       heightRange: 16,
       roadWidth: 2.5,
       mainRoadWidth: 6,
@@ -51,10 +51,10 @@ export class CityGenerator {
     
     for (let x = 0; x < this.BLOCK_SIZE; x++) {
       for (let z = 0; z < this.BLOCK_SIZE; z++) {
-        // 跳过主路和边界
+        // Skip main roads and boundaries
         if (x % this.parameters.mainRoadInterval === 0 || z % this.parameters.mainRoadInterval === 0) continue;
         if (x === 0 || z === 0) continue;
-        // 草坪 - 增加尺寸以消除缝隙
+        // Grass - increase size to eliminate gaps
         const grassMesh = this.tileBuilder.buildGrass(
           x * this.CELL_SIZE + (this.CELL_SIZE/2),
           0.5,
@@ -64,95 +64,95 @@ export class CityGenerator {
           this.CELL_SIZE + 2
         );
         group.add(grassMesh);
-        // 检查四周是否为马路，若是则生成白色边缘
+        // Check if adjacent to roads, if so generate white edge
         const edgeThickness = 0.05;
-        const edgeLength = this.CELL_SIZE - 0.4; // 减小长度，避免覆盖草地边缘
-        const edgeWidth = 0.4; // 增加宽度，让白色边界更宽
-        const edgeY = 0.76; // 略高于草坪
+        const edgeLength = this.CELL_SIZE - 0.4; // Reduce length to avoid covering grass edge
+        const edgeWidth = 0.4; // Increase width to make white edge wider
+        const edgeY = 0.76; // Slightly above grass
         const edgeMaterial = new THREE.MeshLambertMaterial({ color: 0xffffff });
         
-        // 只在靠近道路的边缘生成白色边界
-        // 上方 - 只在靠近主路时生成
+        // Only generate white edge near roads
+        // Top - only generate when near main road
         if ((z+1) % this.parameters.mainRoadInterval === 0) {
           const edgeGeo = new THREE.BoxGeometry(edgeLength, edgeThickness, edgeWidth);
           const edgeMesh = new THREE.Mesh(edgeGeo, edgeMaterial);
           edgeMesh.position.set(x * this.CELL_SIZE + (this.CELL_SIZE/2), edgeY, (z+1) * this.CELL_SIZE - edgeWidth/2);
           group.add(edgeMesh);
         }
-        // 下方 - 只在靠近主路时生成
+        // Bottom - only generate when near main road
         if ((z-1) % this.parameters.mainRoadInterval === 0) {
           const edgeGeo = new THREE.BoxGeometry(edgeLength, edgeThickness, edgeWidth);
           const edgeMesh = new THREE.Mesh(edgeGeo, edgeMaterial);
           edgeMesh.position.set(x * this.CELL_SIZE + (this.CELL_SIZE/2), edgeY, z * this.CELL_SIZE + edgeWidth/2);
           group.add(edgeMesh);
         }
-        // 右方 - 只在靠近主路时生成
+        // Right - only generate when near main road
         if ((x+1) % this.parameters.mainRoadInterval === 0) {
           const edgeGeo = new THREE.BoxGeometry(edgeWidth, edgeThickness, edgeLength);
           const edgeMesh = new THREE.Mesh(edgeGeo, edgeMaterial);
           edgeMesh.position.set((x+1) * this.CELL_SIZE - edgeWidth/2, edgeY, z * this.CELL_SIZE + (this.CELL_SIZE/2));
           group.add(edgeMesh);
         }
-        // 左方 - 只在靠近主路时生成
+        // Left - only generate when near main road
         if ((x-1) % this.parameters.mainRoadInterval === 0) {
           const edgeGeo = new THREE.BoxGeometry(edgeWidth, edgeThickness, edgeLength);
           const edgeMesh = new THREE.Mesh(edgeGeo, edgeMaterial);
           edgeMesh.position.set(x * this.CELL_SIZE + edgeWidth/2, edgeY, z * this.CELL_SIZE + (this.CELL_SIZE/2));
           group.add(edgeMesh);
         }
-        // 应用建筑密度
+        // Apply building density
         const seed = chunkX * 10000 + chunkZ * 100 + x * 10 + z;
         if (this.seededRandom(seed + 1000) > this.parameters.buildingDensity) continue;
         
-        // 计算房屋在白色边界内的位置和尺寸
-        const buildingMargin = 0.4 + 0.1; // 使用新的edgeWidth值 + 留出边距
+        // Calculate house position and size within white edge
+        const buildingMargin = 0.4 + 0.1; // Use new edgeWidth value + margin
         const buildingSize = this.CELL_SIZE - buildingMargin * 2;
         
-        // 让房屋围着马路边生成
+        // Make houses generate around road edges
         let buildingX = x * this.CELL_SIZE + (this.CELL_SIZE/2);
         let buildingZ = z * this.CELL_SIZE + (this.CELL_SIZE/2);
         
-        // 根据靠近哪条道路来决定房屋位置
-        const roadOffset = 4; // 增加距离道路的偏移量，让房屋离道路更远
-        let nearRoad = false; // 标记是否靠近道路
-        let roadDirection = ''; // 记录靠近哪条道路
+        // Decide house position based on which road it's near
+        const roadOffset = 4; // Increase distance from road, move houses further from roads
+        let nearRoad = false; // Mark if near road
+        let roadDirection = ''; // Record which road it's near
         
-        // 如果靠近上方道路，将房屋向上移动
+        // If near north road, move house up
         if ((z+1) % this.parameters.mainRoadInterval === 0) {
           buildingZ = z * this.CELL_SIZE + roadOffset;
           nearRoad = true;
           roadDirection = 'north';
         }
-        // 如果靠近下方道路，将房屋向下移动
+        // If near south road, move house down
         else if ((z-1) % this.parameters.mainRoadInterval === 0) {
           buildingZ = (z+1) * this.CELL_SIZE - roadOffset;
           nearRoad = true;
           roadDirection = 'south';
         }
-        // 如果靠近右方道路，将房屋向右移动
+        // If near east road, move house right
         else if ((x+1) % this.parameters.mainRoadInterval === 0) {
           buildingX = x * this.CELL_SIZE + roadOffset;
           nearRoad = true;
           roadDirection = 'east';
         }
-        // 如果靠近左方道路，将房屋向左移动
+        // If near west road, move house left
         else if ((x-1) % this.parameters.mainRoadInterval === 0) {
           buildingX = (x+1) * this.CELL_SIZE - roadOffset;
           nearRoad = true;
           roadDirection = 'west';
         }
         
-        // 只有在靠近道路时才生成房屋
+        // Only generate houses if near a road
         if (!nearRoad) continue;
         
-        // 根据道路方向调整房屋尺寸，避免交叉
+        // Adjust house size based on road direction to avoid intersection
         let adjustedBuildingSize = buildingSize;
         if (roadDirection === 'north' || roadDirection === 'south') {
-          // 南北方向的房屋，减小宽度避免与东西方向的房屋交叉
-          adjustedBuildingSize = buildingSize * 0.6; // 进一步减小尺寸
+          // Houses in north-south direction, reduce width to avoid intersection with east-west houses
+          adjustedBuildingSize = buildingSize * 0.6; // Further reduce size
         } else if (roadDirection === 'east' || roadDirection === 'west') {
-          // 东西方向的房屋，减小深度避免与南北方向的房屋交叉
-          adjustedBuildingSize = buildingSize * 0.6; // 进一步减小尺寸
+          // Houses in east-west direction, reduce depth to avoid intersection with north-south houses
+          adjustedBuildingSize = buildingSize * 0.6; // Further reduce size
         }
         
         const h = 4 + Math.floor(this.seededRandom(seed) * this.parameters.heightRange);
@@ -206,7 +206,7 @@ export class CityGenerator {
     const camX = Math.floor(camera.position.x / (this.BLOCK_SIZE * this.CELL_SIZE));
     const camZ = Math.floor(camera.position.z / (this.BLOCK_SIZE * this.CELL_SIZE));
     
-    // 如果强制重新生成，清除所有chunks
+    // If force regenerate, clear all chunks
     if (this.forceRegenerateVisibleChunks) {
       this.chunks.forEach((group) => {
         this.scene.remove(group);
@@ -235,11 +235,11 @@ export class CityGenerator {
   }
 
   regenerateCity() {
-    console.log('开始重新生成城市');
-    // 清除所有现有的chunks
+    console.log('Starting city regeneration');
+    // Clear all existing chunks
     this.chunks.forEach((group) => {
       this.scene.remove(group);
-      // 清理几何体和材质
+      // Clean up geometries and materials
       group.traverse((child) => {
         if (child.geometry) {
           child.geometry.dispose();
@@ -255,10 +255,10 @@ export class CityGenerator {
     });
     this.chunks.clear();
     
-    // 更新全局种子
+    // Update global seed
     this.GLOBAL_SEED = this.parameters.randomSeed;
     
-    // 强制重新生成当前可见的chunks
+    // Force regenerate current visible chunks
     this.forceRegenerateVisibleChunks = true;
   }
 } 

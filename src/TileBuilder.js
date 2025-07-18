@@ -19,6 +19,14 @@ export class TileBuilder {
     return mesh;
   }
 
+  buildSidewalk(x, y, z, w, h, d) {
+    const geo = new THREE.BoxGeometry(w, h, d);
+    const mat = new THREE.MeshLambertMaterial({ color: 0xffffff }); // 白色人行道
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(x, y, z);
+    return mesh;
+  }
+
   buildGrass(x, y, z, w, h, d) {
     // 创建整体不规则的草坪形状
     const segments = 8; // 较少的分段数，专注于整体形状
